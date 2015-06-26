@@ -1,5 +1,7 @@
-import java.io.*;
-import java.net.*;
+import java.io.IOException;
+import java.net.ConnectException;
+import java.net.InetAddress;
+import java.net.Socket;
 
 public class Client
 {
@@ -21,15 +23,15 @@ public class Client
         {
             // connect to the server
             Socket client = new Socket(address, port);
-
             System.out.println("connected");
 
+            // Construct the communicator which responsible for reading and writing from specific socket
             Communication communication = new Communication();
             communication.reader(client, true);
             communication.writer(client);
 
         } catch (ConnectException e) {
-            System.out.println( e.getMessage() + "\nThis Address/port is not available");
+            System.err.println( e.getMessage() + "\nThis Address/port is not available");
         }
     }
 

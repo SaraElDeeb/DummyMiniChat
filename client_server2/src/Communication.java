@@ -1,46 +1,40 @@
 import java.io.*;
 import java.net.Socket;
+import java.util.ArrayList;
+import java.util.Observable;
 
-class Communication extends Thread
+public class Communication extends Observable implements Runnable
 {
     boolean is_socket_closed = false;
-//    boolean is_closeAfterSocketClosed;
 
-    Communication( /*boolean is_closeAfterSocketClosed*/ )
-    {
-//        this.is_closeAfterSocketClosed = is_closeAfterSocketClosed;
-    }
+    Communication() {}
 
-    private void start_communication()
+    protected Runnable construct_writer(final PrintWriter writer)
     {
-        // TODO: Server write once Read from multiple source
-    }
-
-    private Runnable construct_writer(final PrintWriter writer, final Socket socket)
-    {
+        final BufferedReader input = new BufferedReader(new InputStreamReader(System.in));
         return new Runnable()
         {
             @Override
             public void run()
             {
-                final BufferedReader input = new BufferedReader(new InputStreamReader(System.in));
                 String read_input;
 
                 try {
-                    while ((read_input = input.readLine()) != null && !is_socket_closed )
+                    String msg;
+
+                    while ( !writer.checkError() && (read_input = input.readLine()) != null /*&& !is_socket_closed*/ )
                     {
-                        String msg;
-                        msg = "<" + socket.getLocalSocketAddress().toString().substring(1) + "> " + read_input;
+                        msg = read_input;
                         writer.println(msg);
                     }
                 } catch (IOException e) {
-                    e.getMessage();
+                    System.err.println(e.getMessage());
                 }finally {
                     writer.close();
                     try {
                         input.close();
                     } catch (IOException e) {
-                        e.printStackTrace();
+                        System.err.println(e.getMessage());
                     }
                 }
             }
@@ -51,12 +45,12 @@ class Communication extends Thread
     {
         final PrintWriter writer = new PrintWriter(socket.getOutputStream(), true);
 
-        new Thread(construct_writer(writer, socket)).start();
+        new Thread(construct_writer(writer)).start();
         return writer;
     }
 
-    private Runnable construct_reader(final BufferedReader reader, final String address,
-                                      final boolean is_client) throws IOException
+    protected Runnable construct_reader(final BufferedReader reader, final String address,
+                                      final boolean is_client, final Socket socket) throws IOException
     {
         return new Runnable()
         {
@@ -67,19 +61,25 @@ class Communication extends Thread
 
                 try
                 {
-                    while ((msg = reader.readLine()) != null && !msg.equals("EOL"))
+                    while (socket.isConnected() && (msg = reader.readLine()) != null && !msg.equals("EOL"))
                     {
-                        System.out.println(msg);
+                        System.out.println("<" + socket.getRemoteSocketAddress().toString().substring(1) + "> " + msg);
                     }
                 } catch (IOException e) {
-                    e.printStackTrace();
+                    System.err.println(e.getMessage());
                 } finally {
                     if( is_client )
-                        System.out.println("The Server has been closed");
+                        System.out.println("Disconnected");
                     else
                         System.out.println("Client " + address + " has been closed");
-
+                    try {
+                        reader.close();
+                    } catch (IOException e) {
+                        System.err.println(e.getMessage());
+                    }
                     is_socket_closed = true;
+                    setChanged();
+                    notifyObservers(socket);
                 }
             }
         };
@@ -92,7 +92,66 @@ class Communication extends Thread
 
         String address = socket.getRemoteSocketAddress().toString().substring(1);
 
-        new Thread(construct_reader(reader, address, is_client)).start();
+        new Thread(construct_reader(reader, address, is_client, socket)).start();
         return reader;
+    }
+
+    @Override
+    public void run() {}
+}
+
+
+class ServerCommunication extends Communication
+{
+    ArrayList<Socket> list_of_sockets;
+
+    ServerCommunication(ArrayList<Socket> list_of_sockets)
+    {
+        this.list_of_sockets = list_of_sockets;
+    }
+
+    public void construct_writer() throws IOException
+    {
+        final BufferedReader input = new BufferedReader(new InputStreamReader(System.in));
+
+        Runnable writer =  new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                String msg;
+                try {
+                    while ( (msg = input.readLine()) != null )
+                    {
+                        send_message(msg);
+                    }
+                } catch (IOException e) {
+                    System.err.println(e.getMessage());
+                }finally {
+                    try {
+                        input.close();
+                    } catch (IOException e) {
+                        System.err.println(e.getMessage());
+                    }
+                }
+            }
+        };
+
+        new Thread(writer).start();
+    }
+
+    private void send_message(String msg) throws IOException
+    {
+        for (Socket socket : list_of_sockets)
+        {
+            OutputStream stream = socket.getOutputStream();
+            stream.write( (msg+"\n").getBytes() );
+            stream.flush();
+        }
+    }
+
+    PrintWriter writer(Socket socket) throws IOException
+    {
+        return new PrintWriter(socket.getOutputStream(), true);
     }
 }
