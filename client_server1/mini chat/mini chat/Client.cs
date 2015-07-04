@@ -18,21 +18,28 @@ namespace mini_chat
             client = new TcpClient();
         }
 
-        public bool connect(string ip, int port)
+        public void connect(string ip, int port)
         {
             this.ip = ip;
             this.port = port;
 
             try
             {
+
                 client.Connect(this.ip, this.port);
-                return true;
+                Console.WriteLine("connected");
+
+                NetworkStream stream = client.GetStream();
+                byte[] readMessege = new byte[client.ReceiveBufferSize];
+                int messegeByte = stream.Read(readMessege, 0, client.ReceiveBufferSize);
+                Console.WriteLine("Received messege: " + Encoding.ASCII.GetString(readMessege, 0, messegeByte));
+                client.Close();
+
             }
 
             catch (Exception ex)
             {
                 Console.WriteLine("error.." + ex.StackTrace);
-                return false;
                 
             }
             

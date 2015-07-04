@@ -14,10 +14,8 @@ namespace mini_chat
             int port = 12345;
             Client clnt = new Client();
 
-            bool result = clnt.connect(ip, port);
+            clnt.connect(ip, port);
 
-            if (result)
-                Console.WriteLine("connected");
              
         }
     }
